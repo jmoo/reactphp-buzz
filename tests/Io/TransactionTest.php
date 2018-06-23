@@ -61,6 +61,34 @@ class TransactionTest extends TestCase
         $this->assertEquals('hello world', (string)$response->getBody());
     }
 
+    public function testReceivingStreamingBodyWillResolveWithBufferedResponseWhenContentLengthIsReached()
+    {
+        $messageFactory = new MessageFactory();
+        $loop = Factory::create();
+
+        $stream = new ThroughStream();
+        $loop->addTimer(0.001, function () use ($stream) {
+            $stream->emit('data', array('hello world'));
+        });
+
+        $request = $this->getMockBuilder('Psr\Http\Message\RequestInterface')->getMock();
+
+        $headers = array('Content-Length' => '11');
+        $response = $messageFactory->response(1.1, 200, 'OK', $headers, $stream);
+
+        // mock sender to resolve promise with the given $response in response to the given $request
+        $sender = $this->makeSenderMock();
+        $sender->expects($this->once())->method('send')->with($this->equalTo($request))->willReturn(Promise\resolve($response));
+
+        $transaction = new Transaction($request, $sender, array(), $messageFactory);
+        $promise = $transaction->send();
+
+        $response = Block\await($promise, $loop);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('hello world', (string)$response->getBody());
+    }
+
     /**
      * @expectedException RuntimeException
      */

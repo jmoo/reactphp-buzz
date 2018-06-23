@@ -90,7 +90,14 @@ class Transaction
 
         // buffer stream and resolve with buffered body
         $messageFactory = $this->messageFactory;
-        return Stream\buffer($stream)->then(
+
+        if ($response->hasHeader('content-length')) {
+            $maxLength = intval($response->getHeaderLine('content-length'));
+        } else {
+            $maxLength = null;
+        }
+
+        return Stream\buffer($stream, $maxLength)->then(
             function ($body) use ($response, $messageFactory) {
                 return $response->withBody($messageFactory->body($body));
             },
